@@ -15,7 +15,7 @@ x-minio-common: &minio-common
     # Connect to Keycloak service _KEYCLOAK_ID is the name of Identity/OpenID Configuration.
     # We can use nginx instead of keycloak's container.
     MINIO_IDENTITY_OPENID_VENDOR: keycloak
-    MINIO_IDENTITY_OPENID_CONFIG_URL_KEYCLOAK_ID: http://keycloak-web:8080/realms/minio-server/.well-known/openid-configuration
+    MINIO_IDENTITY_OPENID_CONFIG_URL_KEYCLOAK_ID: http://keycloak-web:8080/realms/${KC_REALM}/.well-known/openid-configuration
     MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC_KEYCLOAK_ID: on
     MINIO_IDENTITY_OPENID_SCOPES_KEYCLOAK_ID: ${KEYCLOAK_SCOPE}
     MINIO_IDENTITY_OPENID_CLIENT_ID_KEYCLOAK_ID: ${KEYCLOAK_CLIENT_ID}
@@ -145,14 +145,18 @@ services:
       - 8080:8080
       - 9000:9000
       - 9001:9001
-      # - 5000:5000
+      - 5000:5000
 
     restart: unless-stopped
     depends_on:
-      - minio1
-      - minio2
-      - minio3
-      - minio4
+      minio1:
+        condition: service_healthy
+      minio2:
+        condition: service_healthy
+      minio3:
+        condition: service_healthy
+      minio4:
+        condition: service_healthy
 
   # Create the MLflow's bucket, if it doesn't exist.
   minio-create-bucket:
@@ -165,10 +169,14 @@ services:
     volumes:
       - ./config/create_bucket.sh:/usr/src/create_bucket.sh
     depends_on:
-      - minio1
-      - minio2
-      - minio3
-      - minio4
+      minio1:
+        condition: service_healthy
+      minio2:
+        condition: service_healthy
+      minio3:
+        condition: service_healthy
+      minio4:
+        condition: service_healthy
     entrypoint: ["/bin/sh"]
     command: ["-c", "chmod +x /usr/src/create_bucket.sh && /usr/src/create_bucket.sh"]
 
@@ -185,10 +193,14 @@ services:
       - ./postgres_data/mlflow_db:/var/lib/postgresql/data/
     restart: unless-stopped
     depends_on:
-    - minio1
-    - minio2
-    - minio3
-    - minio4
+      minio1:
+        condition: service_healthy
+      minio2:
+        condition: service_healthy
+      minio3:
+        condition: service_healthy
+      minio4:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB_ML} -U ${POSTGRES_USER_ML}"]
       interval: 10s
@@ -224,7 +236,7 @@ services:
       dockerfile: ./config/mlflow_server/mlflow.Dockerfile
     container_name: mlflow
     image: mflow
-    ports:
+    expose:
       - 5000:5000
     environment:
       HOST_IP: localhost:5000
@@ -286,7 +298,6 @@ services:
     depends_on:
       keycloak-web:
         condition: service_healthy
-      # Just to be deployed last.
       nginx:
         condition: service_started
 
