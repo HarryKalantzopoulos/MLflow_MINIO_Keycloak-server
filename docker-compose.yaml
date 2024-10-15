@@ -1,0 +1,295 @@
+# configuration source: 
+# https://github.com/minio/minio/blob/master/docs/orchestration/docker-compose/docker-compose.yaml
+# You may change docker compose and nginx for other number of nodes and "drive"
+# Settings and configurations that are common for all containers.
+x-minio-common: &minio-common
+  image: quay.io/minio/minio 
+  command: server --console-address ":9001" http://minio{1...4}/data{1...2}
+  environment:
+    MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
+    MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
+    # You need to do the connection of keycloak with minio manually, follow: 
+    # https://min.io/docs/minio/container/operations/external-iam/configure-keycloak-identity-management.html
+    # Then you can proceed and define the env variables accordingly.
+    # Note! env variables are immutable (cannot change from Minio interface)
+    # Connect to Keycloak service _KEYCLOAK_ID is the name of Identity/OpenID Configuration.
+    # We can use nginx instead of keycloak's container.
+    MINIO_IDENTITY_OPENID_VENDOR: keycloak
+    MINIO_IDENTITY_OPENID_CONFIG_URL_KEYCLOAK_ID: http://keycloak-web:8080/realms/minio-server/.well-known/openid-configuration
+    MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC_KEYCLOAK_ID: on
+    MINIO_IDENTITY_OPENID_SCOPES_KEYCLOAK_ID: ${KEYCLOAK_SCOPE}
+    MINIO_IDENTITY_OPENID_CLIENT_ID_KEYCLOAK_ID: ${KEYCLOAK_CLIENT_ID}
+    MINIO_IDENTITY_OPENID_CLIENT_SECRET_KEYCLOAK_ID: ${KEYCLOAK_CLIENT_ID_SECRET}
+
+  expose:
+    - 9000
+    - 9001
+
+  healthcheck:
+    test: ["CMD", "mc", "ready", "local"]
+    interval: 5s
+    timeout: 5s
+    retries: 5
+
+  depends_on:
+    keycloak-web:
+      condition: service_healthy
+
+services:
+
+  keycloak-db:
+    image: postgres:16.3
+    container_name: keycloak-db
+    # On linux be sure to create the volumes and sudo chown -R 1000:1000 postgres_data/ 
+    # user: "1000:1000"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_KC}
+      POSTGRES_USER: ${POSTGRES_USER_KC}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_KC}
+    volumes:
+      - ./postgres_data/keycloak_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB_KC} -U ${POSTGRES_USER_KC}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  keycloak-web:
+    image: quay.io/keycloak/keycloak:24.0.5
+    container_name: keycloak-web
+    environment:
+
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db/${POSTGRES_DB_KC}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: false
+
+      DB_VENDOR: postgres
+      KC_DB_USERNAME: ${POSTGRES_USER_KC}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD_KC}
+      KC_LOG_LEVEL: info
+      KC_METRICS_ENABLED: true
+      KC_HEALTH_ENABLED: true
+      KC_PROXY_ADDRESS_FORWARDING: true
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: true
+
+    volumes:
+      - ./config/keycloak_only_for_testing/realm-export.json:/opt/keycloak/data/import/realm_export.json:ro
+    command: start-dev --import-realm
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    expose:
+      - 8080:8080
+    healthcheck:
+      test: 
+        - CMD-SHELL
+        - >
+          [ -f /tmp/HealthCheck.java ] || echo "
+          public class HealthCheck {
+              public static void main(String[] args) throws java.lang.Throwable {
+                  System.exit(
+                      java.net.HttpURLConnection.HTTP_OK ==
+                      ((java.net.HttpURLConnection)new java.net.URL(args[0]).openConnection()).getResponseCode() ? 0 : 1
+                  );
+              }
+          }" > /tmp/HealthCheck.java &&
+          java /tmp/HealthCheck.java http://localhost:8080/health/live
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  minio1:
+    <<: *minio-common
+    hostname: minio1
+    volumes:
+      - ./minio_data/data1-1:/data1
+      - ./minio_data/data1-2:/data2
+
+  minio2:
+    <<: *minio-common
+    hostname: minio2
+    volumes:
+      - ./minio_data/data2-1:/data1
+      - ./minio_data/data2-2:/data2
+
+  minio3:
+    <<: *minio-common
+    hostname: minio3
+    volumes:
+      - ./minio_data/data3-1:/data1
+      - ./minio_data/data3-2:/data2
+
+  minio4:
+    <<: *minio-common
+    hostname: minio4
+    volumes:
+      - ./minio_data/data4-1:/data1
+      - ./minio_data/data4-2:/data2
+
+  nginx:
+    image: nginx:latest
+    hostname: nginx
+
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - 8080:8080
+      - 9000:9000
+      - 9001:9001
+      # - 5000:5000
+
+    restart: unless-stopped
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+
+  # Create the MLflow's bucket, if it doesn't exist.
+  minio-create-bucket:
+    image: minio/mc
+    container_name: minio_bucket
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
+      MINIO_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
+    volumes:
+      - ./config/create_bucket.sh:/usr/src/create_bucket.sh
+    depends_on:
+      - minio1
+      - minio2
+      - minio3
+      - minio4
+    entrypoint: ["/bin/sh"]
+    command: ["-c", "chmod +x /usr/src/create_bucket.sh && /usr/src/create_bucket.sh"]
+
+  mlflow-db:
+    image: postgres:16.3
+    container_name: mlflow-db
+    # user: "1000:1000"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_ML}
+      POSTGRES_USER: ${POSTGRES_USER_ML}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_ML}
+      PGDATA: /var/lib/postgresql/data/
+    volumes:
+      - ./postgres_data/mlflow_db:/var/lib/postgresql/data/
+    restart: unless-stopped
+    depends_on:
+    - minio1
+    - minio2
+    - minio3
+    - minio4
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB_ML} -U ${POSTGRES_USER_ML}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  mlflow-db-auth:
+    image: postgres:16.3
+    container_name: mlflow-db-auth
+    # user: "1000:1000"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB_ML_AUTH}
+      POSTGRES_USER: ${POSTGRES_USER_ML_AUTH}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD_ML_AUTH}
+    volumes:
+      - ./postgres_data/mlflow_auth_db:/var/lib/postgresql/data/
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d ${POSTGRES_DB_ML_AUTH} -U ${POSTGRES_USER_ML_AUTH}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      mlflow-db:
+        condition: service_healthy
+
+  mlflow:
+    restart: unless-stopped
+    build:
+      dockerfile: ./config/mlflow_server/mlflow.Dockerfile
+    container_name: mlflow
+    image: mflow
+    ports:
+      - 5000:5000
+    environment:
+      HOST_IP: localhost:5000
+      MLFLOW_S3_ENDPOINT_URL: http://nginx:9000/
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+      KC_URL: http://nginx:8080/realms
+      KC_REALM: ${KC_REALM}
+      KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KC_CLIENT_SECRET: ${KEYCLOAK_CLIENT_ID_SECRET}
+
+      MLFLOW_TRACKING_URI: postgresql://${POSTGRES_USER_ML}:${POSTGRES_PASSWORD_ML}@mlflow-db/${POSTGRES_DB_ML}
+      MLFLOW_REGISTRY_URI: postgresql://${POSTGRES_USER_ML}:${POSTGRES_PASSWORD_ML}@mlflow-db/${POSTGRES_DB_ML}
+      # Should match Dockerfile
+      MLFLOW_AUTH_CONFIG_PATH: /usr/src/app/basic_auth.ini
+      DEBUG: true
+
+    command: 
+      - mlflow
+      - server
+      - --default-artifact-root
+      - s3://${AWS_S3_BUCKET_NAME}/
+      - --backend-store-uri
+      - postgresql://${POSTGRES_USER_ML}:${POSTGRES_PASSWORD_ML}@mlflow-db/${POSTGRES_DB_ML}
+      - --host
+      - 0.0.0.0
+      - --app-name
+      - basic-auth
+      - --workers
+      - "1"
+    # Not required.
+    volumes:
+      - ./faith_tokens:/home/.config/faith_tokens
+
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/src/app/healthcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    depends_on:
+      mlflow-db-auth:
+        condition: service_healthy
+
+  # Optional service pgadmin
+  pgadmin:
+    container_name: pgadmin
+    image: dpage/pgadmin4
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    volumes:
+       - ./pgadmin:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      keycloak-web:
+        condition: service_healthy
+      # Just to be deployed last.
+      nginx:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  minio_data:

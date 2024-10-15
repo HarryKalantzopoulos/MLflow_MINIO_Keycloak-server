@@ -1,0 +1,37 @@
+# MINIO 
+AWS_ACCESS_KEY_ID= minioadmin
+AWS_SECRET_ACCESS_KEY= minioadmin
+AWS_S3_BUCKET_NAME= ai-experiment
+KEYCLOAK_SCOPE= email
+KEYCLOAK_CLIENT_ID= authminio
+KEYCLOAK_CLIENT_ID_SECRET= n7JtQ6v7VnXCdiWFXyGoLpMsqWQXr8PU
+
+# KEYCLOAK
+KEYCLOAK_ADMIN= kcadmin
+KEYCLOAK_ADMIN_PASSWORD= kcadmin
+# You will need to create this realm if it does not exist. (first time)
+KC_REALM = minio-server
+
+# MLFLOW
+MLFLOW_TRACKING_USERNAME= mlfadmin
+MLFLOW_TRACKING_PASSWORD=mlfadmin
+
+# POSTGRES-KEYCLOAK
+POSTGRES_USER_KC= kcadmin
+POSTGRES_PASSWORD_KC= kcadmin
+POSTGRES_DB_KC= keycloak_database
+
+# POSTGRES-MLFLOW
+POSTGRES_USER_ML= mlfadmin
+POSTGRES_PASSWORD_ML= mlfadmin
+POSTGRES_DB_ML= mlflow_database
+
+# POSTGRES-MLFLOW-AUTH
+POSTGRES_USER_ML_AUTH= mlfadmin
+POSTGRES_PASSWORD_ML_AUTH= mlfadmin
+POSTGRES_DB_ML_AUTH= mlflow_oauth_database
+
+# PGADMIN
+PGDATA= miniodata
+PGADMIN_DEFAULT_EMAIL= test@hotmail.com
+PGADMIN_DEFAULT_PASSWORD= test
