@@ -53,7 +53,7 @@ KC_OPENID = KeycloakOpenID(
 )
 
 WELL_KNOWN = KC_OPENID.well_known()
-TLS_PATH = os.getenv('REQUESTS_CA_BUNDLE',None)
+
 MLF_AUTH_STORE = auth_store
 REDIRECT_URL = f"https://{IP_ADDRESS}:45000/"
 
@@ -206,10 +206,6 @@ def handle_post_request(data: Dict[str,Any]) -> Dict[str,Any]:
             }
         )
 
-        if TLS_PATH is not None:
-            pem = read_file( TLS_PATH )
-            minio_creds.update( {"pem": pem} )
-
         tokens = jwt.encode(minio_creds, "U2hvdWxkU2V0UGFzc3dvcmQ0", algorithm="HS256")
         return jsonify({'token': tokens})
 
@@ -250,10 +246,6 @@ def handle_post_request(data: Dict[str,Any]) -> Dict[str,Any]:
             "exp": KC_OPENID.decode_token( tokens['access_token'])['exp'],
         }
     )
-
-    if TLS_PATH is not None:
-        pem = read_file( TLS_PATH )
-        minio_creds.update( {"pem": pem} )
 
     _logger.debug("passport token  %s",minio_creds)
     tokens = jwt.encode(minio_creds, "U2hvdWxkU2V0UGFzc3dvcmQ0", algorithm="HS256")

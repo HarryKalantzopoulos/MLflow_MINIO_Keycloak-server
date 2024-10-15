@@ -1,14 +1,10 @@
-HOST_IP = 
-# Nginx - Self-Signed Certificate can leave empty
-COUNTRY= 
-STATE= 
-LOCALITY= 
-ORGANIZATION= 
-SECTOR= 
-EMAIL= 
-# Nginx - TLS certs
-ROOT_PASS = cm9vdF9wYXNzd29yZA
-TLS_PASS = dGxzX3Bhc3N3b3Jk
+# DOMAIN CONFIG (DuckDNS & certbot)
+# required 3 domains
+DUCKDNS_DOMAINS= domainkc,domainmin,domainmlf
+#! MINIO needs to change pem files to .key and .crt
+MINIO_DOMAIN= domainmin
+DUCKDNS_TOKEN=
+EMAIL=
 
 # MINIO 
 AWS_ACCESS_KEY_ID= minioadmin
@@ -26,7 +22,7 @@ KC_REALM = minio-server
 
 # MLFLOW
 MLFLOW_TRACKING_USERNAME= mlfadmin
-MLFLOW_TRACKING_PASSWORD=mlfadmin
+MLFLOW_TRACKING_PASSWORD= mlfadmin
 
 # POSTGRES-KEYCLOAK
 POSTGRES_USER_KC= kcadmin

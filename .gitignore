@@ -1,10 +1,9 @@
 # Volumes
-.certs
 faith_tokens
 pgadmin
 postgres_data
 minio_data
-*.pem
+.certs
 
 # Docker project generated files to ignore
 #  if you want to ignore files created by your editor/tools,

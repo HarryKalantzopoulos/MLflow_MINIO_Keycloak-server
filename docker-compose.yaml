@@ -8,7 +8,7 @@ x-minio-common: &minio-common
   environment:
     MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
     MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
-    MINIO_BROWSER_REDIRECT_URL: https://${HOST_IP}:49001
+    MINIO_BROWSER_REDIRECT_URL: https://domainmin.duckdns.org/minio/ui
     # You need to do the connection of keycloak with minio manually, follow: 
     # https://min.io/docs/minio/container/operations/external-iam/configure-keycloak-identity-management.html
     # Then you can proceed and define the env variables accordingly.
@@ -16,11 +16,13 @@ x-minio-common: &minio-common
     # Connect to Keycloak service _KEYCLOAK_ID is the name of Identity/OpenID Configuration.
     # We can use nginx instead of keycloak's container.
     MINIO_IDENTITY_OPENID_VENDOR: keycloak
-    MINIO_IDENTITY_OPENID_CONFIG_URL_KEYCLOAK_ID: https://${HOST_IP}:48080/realms/${KC_REALM}/.well-known/openid-configuration
+    MINIO_IDENTITY_OPENID_CONFIG_URL_KEYCLOAK_ID: http://keycloak-web:8092/realms/${KC_REALM}/.well-known/openid-configuration
     MINIO_IDENTITY_OPENID_REDIRECT_URI_DYNAMIC_KEYCLOAK_ID: on
+    MINIO_IDENTITY_OPENID_REDIRECT_URI_KEYCLOAK_IAM: https://domainmin.duckdns.org/minio/ui/oauth_callback
     MINIO_IDENTITY_OPENID_SCOPES_KEYCLOAK_ID: ${KEYCLOAK_SCOPE}
     MINIO_IDENTITY_OPENID_CLIENT_ID_KEYCLOAK_ID: ${KEYCLOAK_CLIENT_ID}
     MINIO_IDENTITY_OPENID_CLIENT_SECRET_KEYCLOAK_ID: ${KEYCLOAK_CLIENT_ID_SECRET}
+    CONSOLE_IDP_CALLBACK: https://domainmin.duckdns.org/minio/ui/oauth_callback
 
   expose:
     - 9000
@@ -37,6 +39,34 @@ x-minio-common: &minio-common
       condition: service_healthy
 
 services:
+
+  duckdns_certbot:
+    # There is 1 min interval for each certification, 
+    # just to propagate across the internet. Check renew_certs.sh
+    # cronjob was set to 13th day of the month.
+    # Always check the docker logs, it might require some time until DuckDNS and certbot work.
+    image: duckdns_certbot
+    build:
+      dockerfile: ./config/ip_utils/duckdns_certbot.Dockerfile
+    container_name: duckdns_certbot
+
+    environment:
+      EMAIL: ${EMAIL}
+      DUCKDNS_TOKEN: ${DUCKDNS_TOKEN}
+      DUCKDNS_DOMAINS: ${DUCKDNS_DOMAINS}
+      MINIO_DOMAIN: ${MINIO_DOMAIN}
+    volumes:
+      - ./.certs:/usr/.certs
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/usr/src/certs_healthcheck.sh"]
+      # due to time propagation.
+      interval: 120s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    entrypoint: ["/bin/sh", "-c", "/usr/src/renew_duckdns.sh && /usr/src/renew_certs.sh && crond -f"]
 
   keycloak-db:
     image: postgres:16.3
@@ -67,10 +97,7 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
 
-      KC_HOSTNAME: ${HOST_IP}
-      KC_HOSTNAME_PORT: 48080
-      KC_HOSTNAME_STRICT: false
-      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HOSTNAME_URL: https://domainkc.duckdns.org
 
       DB_VENDOR: postgres
       KC_DB_USERNAME: ${POSTGRES_USER_KC}
@@ -84,12 +111,12 @@ services:
 
     volumes:
       - ./config/keycloak_only_for_testing/realm-export.json:/opt/keycloak/data/import/realm_export.json:ro
-      - ./.certs:/conf/truststores
+
     command: start-dev --import-realm
     depends_on:
       keycloak-db:
         condition: service_healthy
-    expose:
+    ports:
       - 8080:8080
     healthcheck:
       test: 
@@ -115,7 +142,6 @@ services:
     volumes:
       - ./minio_data/data1-1:/data1
       - ./minio_data/data1-2:/data2
-      - ./.certs:/root/.minio/certs/CAs
 
   minio2:
     <<: *minio-common
@@ -123,7 +149,6 @@ services:
     volumes:
       - ./minio_data/data2-1:/data1
       - ./minio_data/data2-2:/data2
-      - ./.certs:/root/.minio/certs/CAs
 
   minio3:
     <<: *minio-common
@@ -131,7 +156,6 @@ services:
     volumes:
       - ./minio_data/data3-1:/data1
       - ./minio_data/data3-2:/data2
-      - ./.certs:/root/.minio/certs/CAs
 
   minio4:
     <<: *minio-common
@@ -139,46 +163,23 @@ services:
     volumes:
       - ./minio_data/data4-1:/data1
       - ./minio_data/data4-2:/data2
-      - ./.certs:/root/.minio/certs/CAs
 
   nginx:
-    image: nginx:1.19.2-alpine
-    hostname: nginx
-    environment:
-      HOST_IP: $HOST_IP
-      COUNTRY: $COUNTRY
-      STATE: $STATE
-      LOCALITY: $LOCALITY
-      ORGANIZATION: $ORGANIZATION
-      SECTOR: $SECTOR
-      LOGGER: /var/log/tls_history.log
-      EMAIL: $EMAIL
-      ROOT_PASS: $ROOT_PASS
-      TLS_PASS: $TLS_PASS
+    image: nginx:latest
+    container_name: nginx
 
     volumes:
       - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./config/nginx/template:/etc/nginx/templates/nginx.conf.template:ro
       - ./.certs:/etc/nginx/certs
-      - ./config/nginx/scripts:/opt/scripts
 
     ports:
-      - 48080:48080
-      - 49000:49000
-      - 49001:49001
-      - 45000:45000
-
-    command: sh -c "/opt/scripts/update.sh && /opt/scripts/cronjob_tls.sh && nginx -g 'daemon off;'"
+      - 443:443
+      - 80:80
+      - 9000:9000
 
     restart: unless-stopped
     depends_on:
-      minio1:
-        condition: service_healthy
-      minio2:
-        condition: service_healthy
-      minio3:
-        condition: service_healthy
-      minio4:
+      mlflow:
         condition: service_healthy
 
   # Create the MLflow's bucket, if it doesn't exist.
@@ -259,15 +260,15 @@ services:
       dockerfile: ./config/mlflow_server/mlflow.Dockerfile
     container_name: mlflow
     image: mflow
-    expose:
+    ports:
       - 5000:5000
     environment:
-      HOST_IP: ${HOST_IP}
-      MLFLOW_S3_ENDPOINT_URL: https://${HOST_IP}:49000
+      HOST_IP: domainmlf.duckdns.org
+      MLFLOW_S3_ENDPOINT_URL: http://nginx:9000
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
 
-      KC_URL: https://${HOST_IP}:48080/realms
+      KC_URL: http://keycloak-web:8080/realms
       KC_REALM: ${KC_REALM}
       KC_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
       KC_CLIENT_SECRET: ${KEYCLOAK_CLIENT_ID_SECRET}
@@ -276,11 +277,6 @@ services:
       MLFLOW_REGISTRY_URI: postgresql://${POSTGRES_USER_ML}:${POSTGRES_PASSWORD_ML}@mlflow-db/${POSTGRES_DB_ML}
       # Should match Dockerfile
       MLFLOW_AUTH_CONFIG_PATH: /usr/src/app/basic_auth.ini
-
-      SSL_CERT_FILE: /home/.config/certs/public.pem
-      REQUESTS_CA_BUNDLE: /home/.config/certs/public.pem
-      AWS_CA_BUNDLE: /home/.config/certs/public.pem
-
       DEBUG: true
 
     command: 
@@ -299,7 +295,6 @@ services:
 
     volumes:
       - ./faith_tokens:/home/.config/faith_tokens
-      - ./.certs/:/home/.config/certs
 
     healthcheck:
       test: ["CMD-SHELL", "/usr/src/app/healthcheck.sh"]
