@@ -1,3 +1,15 @@
+HOST_IP = 
+# Nginx - Self-Signed Certificate can leave empty
+COUNTRY= 
+STATE= 
+LOCALITY= 
+ORGANIZATION= 
+SECTOR= 
+EMAIL= 
+# Nginx - TLS certs
+ROOT_PASS = cm9vdF9wYXNzd29yZA
+TLS_PASS = dGxzX3Bhc3N3b3Jk
+
 # MINIO 
 AWS_ACCESS_KEY_ID= minioadmin
 AWS_SECRET_ACCESS_KEY= minioadmin

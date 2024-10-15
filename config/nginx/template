@@ -1,0 +1,3 @@
+map  $host $host_ip {
+  default "$HOST_IP";
+}

@@ -10,13 +10,11 @@ from copy import deepcopy
 import logging
 from uuid import uuid4
 import xml.etree.ElementTree as ET
-
-from base64 import b64decode
 import requests
 import jwt
 from jwcrypto.jwt import JWTExpired
 
-from flask import Response, make_response, session, request, url_for, jsonify
+from flask import Response, make_response, session, request, jsonify
 from keycloak import KeycloakOpenID
 from keycloak.exceptions import KeycloakAuthenticationError, KeycloakPostError
 from mlflow.server.auth import store as auth_store
@@ -27,7 +25,9 @@ from utils import (
     save_tokens,
     load_tokens,
     xml_writer,
-    xml_reader
+    xml_reader,
+    read_file
+
 )
 
 DEBUG = os.getenv("DEBUG", "false")
@@ -41,7 +41,7 @@ IP_ADDRESS = os.environ["HOST_IP"]
 MLFLOW_S3_ENDPOINT_URL = os.environ["MLFLOW_S3_ENDPOINT_URL"]
 KC_URL = os.environ["KC_URL"]
 KC_REALM = os.environ["KC_REALM"]
-ISSUER_REQ = requests.get(f"{KC_URL}/{KC_REALM}", timeout= 10)
+
 KC_CLIENT_ID = os.environ["KC_CLIENT_ID"]
 KC_CLIENT_SECRET = os.environ["KC_CLIENT_SECRET"]
 
@@ -53,12 +53,9 @@ KC_OPENID = KeycloakOpenID(
 )
 
 WELL_KNOWN = KC_OPENID.well_known()
-
+TLS_PATH = os.getenv('REQUESTS_CA_BUNDLE',None)
 MLF_AUTH_STORE = auth_store
-
-REDIRECT_URL = url_for('serve', _external=True)
-_logger.debug("req %s", REDIRECT_URL)
-REDIRECT_URL = f"http://{IP_ADDRESS}/"
+REDIRECT_URL = f"https://{IP_ADDRESS}:45000/"
 
 # The following used for python plug-in. Again, Keycloak settings (e.g. realm should match)
 
@@ -208,6 +205,11 @@ def handle_post_request(data: Dict[str,Any]) -> Dict[str,Any]:
                 "exp": KC_OPENID.decode_token( tokens['access_token'])['exp']
             }
         )
+
+        if TLS_PATH is not None:
+            pem = read_file( TLS_PATH )
+            minio_creds.update( {"pem": pem} )
+
         tokens = jwt.encode(minio_creds, "U2hvdWxkU2V0UGFzc3dvcmQ0", algorithm="HS256")
         return jsonify({'token': tokens})
 
@@ -248,6 +250,10 @@ def handle_post_request(data: Dict[str,Any]) -> Dict[str,Any]:
             "exp": KC_OPENID.decode_token( tokens['access_token'])['exp'],
         }
     )
+
+    if TLS_PATH is not None:
+        pem = read_file( TLS_PATH )
+        minio_creds.update( {"pem": pem} )
 
     _logger.debug("passport token  %s",minio_creds)
     tokens = jwt.encode(minio_creds, "U2hvdWxkU2V0UGFzc3dvcmQ0", algorithm="HS256")
@@ -334,7 +340,7 @@ def authenticate_request() -> Union[Authorization, Response]:
         if session.get("code",None) is None:
             session['code'] = code
 
-        redirect_uri = request.url_root
+        redirect_uri = REDIRECT_URL
 
         tokens = KC_OPENID.token(
             grant_type= "authorization_code",
