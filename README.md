@@ -1,6 +1,6 @@
 # Branches
 
-The main banch uses DuckDNS, certbot and MNMD MINIO if you want to check:
+The main branch uses DuckDNS, certbot and MNMD MINIO if you want to check:
 
 Same, but with SNSD MINIO got to https://github.com/HarryKalantzopoulos/MLflow_MINIO_Keycloak-server/
 
