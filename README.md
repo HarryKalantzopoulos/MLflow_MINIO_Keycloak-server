@@ -1,13 +1,34 @@
-# MLflow server with MINIO, PostgreSQL and Keycloak
+# MLflow server with MINIO, PostgreSQL, Keycloak and openssl.
 
 Setting up an MLflow server with:
 * MINIO to store artifacts.
 * Keycloak for ID management and authentication.
 * PorstgreSQL for database.
+* https: Public IP, Nginx and openssl for self-signed certificates (not trustworthy issue)
+
+
+# Components
+
+The main components are Keycloack, MINIO, MLflow, NGINX, openssl, Postgresql.
+
+Keycloak is your user ID manager, provided authentication and authorization.
+
+MINIO provides a build-in method to perform a single sign on (SSO) login, by authenticate through Keycloak. The authentication can be done either by web or from terminal.
+
+MLflow provides a basic authentication, but we will modify it in order to gain access with the Keycloak authentication. Users can login to the MLflow webpage via SSO (Keycloak client set for MINIO). They need to request access token from Keycloak and session token from MINIO check: 
+
+config/mlflow_server/mlflow_auth_plugin/kc_auth.py
+
+Openssl used for self-signed SSL/TLS. The certificates are not trustworthy. Once generated, you need to use on Nginx (Nginx container generates them), Keycloak, Minio and MLflow. You also need to provide the public key (pem) to the client side.
 
 # Requirements:
 
 * Docker engine + compose or desktop
+
+* Declare your public IP in .env
+
+* Cronjob, especially for Dynamic IP, check:
+  ./config/nginx/scripts
 
 <span style="color:orange"> **Docker volume permissions:** </span>
  
@@ -31,7 +52,7 @@ Setting up an MLflow server with:
 
 **Use .example_env to define your own .env**
 
-# Checking development (http)
+# Checking development (https, openssl)
 
 Rename .example_env to .env an run:
 
@@ -42,7 +63,7 @@ docker compose up --build -d
 
 # MINIO
 
-A distributed MINIO setup is provided. If you want to change it to a single node and drive, make sure to update the docker compose and config/nginx/nginx.conf accordingly.
+A multi-node multi-drive MINIO setup is provided. If you want to change it to a single node and drive, make sure to update the docker compose and config/nginx/nginx.conf accordingly.
 
 e.g.:
 ```docker
@@ -75,6 +96,8 @@ Upon initialization, you will need to start the keycloak and minio services to s
 How to set up Keycloak-MINIO, just follow the official manual:
 
 https://min.io/docs/minio/container/operations/external-iam/configure-keycloak-identity-management.html
+
+You may configure MINIO with environmental variables instead of the webpage.
 
 <span style="color:orange">**Notice:**</span> When you create a new user, there is no attributes in Keycloak *v.24.0.5*, create a group and assign the user into this group instead.
 
@@ -134,6 +157,23 @@ To do this, the required files are:
 - the SSO pipeline.
 - POST request for a registered user to acquire a session token (from MINIO).
 - Validation and Refresh token pipeline
+
+## **Openssl**
+Openssl will create the SSL/TLS credentials for each service (Keycloak, MINIO, MLflow).
+
+These certificates are not trustworthy through the web, so it is required 1) to trust the webpage when asked and 2) to set a workflow to trade the public key with other services and users.
+
+In *config_services/ip_utils/duckdns_certbot.Dockerfile*, you can set your desired cronjob. It will update your DuckDNS, with the new IP, along with the SSL certificates.
+
+<span style="color:orange">**Notice:**</span> MINIO SSL certificates should be renamed:
+ - fullchain.pem &rarr; public.crt
+ - privkey.pem &rarr; private.key
+
+The above certificates are used in NGINX reverse proxy, Keycloak, MINIO, MLflow.
+
+## **NGINX**
+NGINX reverse proxy is used to connect each service with the domain name. It will re-direct any http to https and it will also work as a load-balancer. The aforementioned SSL/TLS certificates are used to achieve a secure communication.
+
 
 ## **MLflow client example**
 You can check how set a client for experiment tracking into **mlflow_client_example.ipynb**.
