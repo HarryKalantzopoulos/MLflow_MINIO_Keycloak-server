@@ -11,8 +11,9 @@ os.makedirs( TOKENS_DIRPATH, exist_ok= True)
 def save_tokens(filename: Path, tokens: Dict[str, Any] ) -> None:
     """ Store tokens. """
 
-    filepath = os.path.join(TOKENS_DIRPATH, f"{filename}.json")
-
+    filepath = os.path.normpath(os.path.join(TOKENS_DIRPATH, f"{filename}.json"))
+    if not filepath.startswith(TOKENS_DIRPATH):
+        raise ValueError("Invalid filename")
     with open(filepath, "w", encoding='utf-8') as jfile:
 
         json.dump(tokens, jfile, indent=4)
@@ -22,8 +23,9 @@ def save_tokens(filename: Path, tokens: Dict[str, Any] ) -> None:
 def load_tokens(filename: Path) -> Optional[Dict[str,Any]]:
     """ Load existing tokens. """
 
-    filepath = os.path.join(TOKENS_DIRPATH, f"{filename}.json")
-
+    filepath = os.path.normpath(os.path.join(TOKENS_DIRPATH, f"{filename}.json"))
+    if not filepath.startswith(TOKENS_DIRPATH):
+        raise ValueError("Invalid filename")
     if not os.path.exists(filepath):
 
         return None
@@ -36,15 +38,18 @@ def load_tokens(filename: Path) -> Optional[Dict[str,Any]]:
 def xml_writer(filename: Path, session_root:str )->None:
     '''' Stores xml file from minio response. '''
 
-    filepath = os.path.join(TOKENS_DIRPATH, f"{filename}.xml")
+    filepath = os.path.normpath(os.path.join(TOKENS_DIRPATH, f"{filename}.xml"))
+    if not filepath.startswith(TOKENS_DIRPATH):
+        raise ValueError("Invalid filename")
     session_root = ET.fromstring(session_root)
     tree = ET.ElementTree(session_root)
     tree.write(filepath)
 
 def xml_reader(filename:str)->Optional[ET.Element]:
     ''' Loads xml file if exists. '''
-    filepath = os.path.join(TOKENS_DIRPATH, f"{filename}.xml")
-
+    filepath = os.path.normpath(os.path.join(TOKENS_DIRPATH, f"{filename}.xml"))
+    if not filepath.startswith(TOKENS_DIRPATH):
+        raise ValueError("Invalid filename")
     if not os.path.exists(filepath):
         return None
 
