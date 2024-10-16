@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 import json
 from typing import Dict, Any, Optional
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 
 TOKENS_DIRPATH = "/home/.config/faith_tokens"
 os.makedirs( TOKENS_DIRPATH, exist_ok= True)
