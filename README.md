@@ -1,3 +1,13 @@
+# Branches
+
+This branch uses only http if you want to check:
+
+The main branch uses DuckDNS, certbot and SNSD MINIO https://github.com/HarryKalantzopoulos/MLflow_MINIO_Keycloak-server/
+
+Same, but with MNMD MINIO got to https://github.com/HarryKalantzopoulos/MLflow_MINIO_Keycloak-server/tree/https_dns_certbot_mnmd
+
+With you public IP and openssl (self signed SSL/TLS) https://github.com/HarryKalantzopoulos/MLflow_MINIO_Keycloak-server/tree/https_self_signed_certs
+
 # MLflow server with MINIO, PostgreSQL and Keycloak.
 
 Setting up an MLflow server with:
