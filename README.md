@@ -19,7 +19,7 @@ MLflow provides a basic authentication, but we will modify it in order to gain a
 
 config/mlflow_server/mlflow_auth_plugin/kc_auth.py
 
-Openssl used for self-signed SSL/TLS. The certificates are not trustworthy. Once generated, you need to use on Nginx (Nginx container generates them), Keycloak, Minio and MLflow. You also need to provide the public key (pem) to the client side.
+Openssl used for self-signed SSL/TLS. The certificates are not trustworthy. Once generated, you need to use on Nginx (Nginx container generates them), Keycloak, MINIO and MLflow. You also need to provide the public key (pem) to the client side.
 
 # Requirements:
 
@@ -68,16 +68,16 @@ A multi-node multi-drive MINIO setup is provided. If you want to change it to a 
 e.g.:
 ```docker
 
-minio:
+MINIO:
 
-  image: quay.io/minio/minio
-  container_name: minio
+  image: quay.io/MINIO/MINIO
+  container_name: MINIO
   environment:
     MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
     MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
     ...
   volumes:
-    - ./minio_data/data:/data
+    - ./MINIO_data/data:/data
   expose:
     - 9000:9000
     - 9001:9001
@@ -91,11 +91,11 @@ minio:
 
 # Setting up Keycloak - MINIO
 
-Upon initialization, you will need to start the keycloak and minio services to set up the SSO login for the MINIO. An exported Keycloak environment is given at config/keycloak_only_for_testing/realm-export.json. You may use the file to set up and check the services, but keep in mind to change the keycloak  client, realm, etc.
+Upon initialization, you will need to start the keycloak and MINIO services to set up the SSO login for the MINIO. An exported Keycloak environment is given at config/keycloak_only_for_testing/realm-export.json. You may use the file to set up and check the services, but keep in mind to change the keycloak  client, realm, etc.
 
 How to set up Keycloak-MINIO, just follow the official manual:
 
-https://min.io/docs/minio/container/operations/external-iam/configure-keycloak-identity-management.html
+https://min.io/docs/MINIO/container/operations/external-iam/configure-keycloak-identity-management.html
 
 You may configure MINIO with environmental variables instead of the webpage.
 
@@ -142,7 +142,7 @@ MINIO_IDENTITY_OPENID_CLIENT_ID_KEYCLOAK_IAM:
 MINIO_IDENTITY_OPENID_CLIENT_SECRET_KEYCLOAK_IAM:
 ```
 
-<span style="color:orange">**Notice:**</span> Remember to restart your minio container, if SSO does not appear.
+<span style="color:orange">**Notice:**</span> Remember to restart your MINIO container, if SSO does not appear.
 
 ## **MLflow**
 
