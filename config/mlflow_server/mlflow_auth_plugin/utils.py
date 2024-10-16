@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 from typing import Dict, Any, Optional
 import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as dET
 
 TOKENS_DIRPATH = "/home/.config/faith_tokens"
 os.makedirs( TOKENS_DIRPATH, exist_ok= True)
@@ -53,7 +54,7 @@ def xml_reader(filename:str)->Optional[ET.Element]:
     if not os.path.exists(filepath):
         return None
 
-    tree = ET.parse(filepath)
+    tree = dET.parse(filepath)
     root = tree.getroot()
 
     return root
