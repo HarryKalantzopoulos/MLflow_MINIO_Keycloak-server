@@ -29,7 +29,7 @@ MLflow provides a basic authentication, but we will modify it in order to gain a
 
 config/mlflow_server/mlflow_auth_plugin/kc_auth.py
 
-DuckDNS is a free service that allows you to bind your own favorite subdomain under duckdns.org to the public IP address in use from your router. With certbot the SSL/TSL provided are trustworthy.
+DuckDNS is a free service that allows you to bind your own favorite subdomain under duckdns.org to the public IP address in use from your router. With certbot the SSL/TLS provided are trustworthy.
 
 # Requirements:
 
